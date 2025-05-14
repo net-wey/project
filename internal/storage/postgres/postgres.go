@@ -84,3 +84,48 @@ func (s *Storage) SaveTask(task Entity.Task) (uuid.UUID, error) {
 
 	return uid, nil
 }
+
+func (s *Storage) GetCalendar(uid uuid.UUID) error {
+	const op = "storage.postgres.GetTask"
+
+	// Сначала проверяем существование задачи
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1)", uid).Scan(&exists)
+	if err != nil {
+		return Entity.Task{}, fmt.Errorf("%s: check task existence: %w", op, err)
+	}
+	if !exists {
+		return Entity.Task{}, fmt.Errorf("%s: %w", op, er.ErrTaskNotFound)
+	}
+
+	// Если задача существует, получаем её данные
+	stmt, err := s.db.Prepare(`
+		SELECT id, report_id, project_id, name, developer_note, 
+			   estimate_planed, estimate_progress, 
+			   start_timestamp, end_timestamp, created_at
+		FROM tasks 
+		WHERE id = $1`)
+	if err != nil {
+		return Entity.Task{}, fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	var task Entity.Task
+	err = stmt.QueryRow(uid).Scan(
+		&task.ID,
+		&task.ReportID,
+		&task.ProjectID,
+		&task.Name,
+		&task.DeveloperNote,
+		&task.EstimatePlaned,
+		&task.EstimateProgress,
+		&task.StartTimestamp,
+		&task.EndTimestamp,
+		&task.CreatedAt,
+	)
+	if err != nil {
+		return Entity.Task{}, fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return task, nil
+}

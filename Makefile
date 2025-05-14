@@ -21,12 +21,12 @@ clean: docker-down
 clean-bin:
 	rm -rf bin/
 
-# Development commands
+
 lint:
 	golangci-lint run ./...
 
 test:
 	go test -v -race ./...
 
-# Run all checks before commit
+
 check: lint test build

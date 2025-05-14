@@ -5,13 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"goproject/internal/entity"
-	"goproject/internal/er"
-
 	"github.com/google/uuid"
 )
 
-// DeveloperRequest представляет структуру запроса для создания разработчика
 type DeveloperRequest struct {
 	Firstname string  `json:"firstname"`
 	LastName  string  `json:"last_name"`
@@ -74,6 +70,7 @@ func NewDeveloperHandler(saver DeveloperSaver) http.HandlerFunc {
 
 		// Обрабатываем deleted_at, если он есть
 		if req.DeletedAt != nil {
+
 			developer.DeletedAt = *req.DeletedAt
 		}
 
