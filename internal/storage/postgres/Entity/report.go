@@ -8,3 +8,4 @@ type Report struct {
 	CreatedAt   time.Time
 	Developer   *Developer
 	Tasks       []Task
+}

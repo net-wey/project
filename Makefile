@@ -1,4 +1,4 @@
-.PHONY: build run run-main docker-up docker-down clean clean-bin
+.PHONY: build run run-main docker-up docker-down clean clean-bin lint test check
 
 build:
 	go build -o bin/main ./cmd/main
@@ -20,3 +20,13 @@ clean: docker-down
 
 clean-bin:
 	rm -rf bin/
+
+# Development commands
+lint:
+	golangci-lint run ./...
+
+test:
+	go test -v -race ./...
+
+# Run all checks before commit
+check: lint test build

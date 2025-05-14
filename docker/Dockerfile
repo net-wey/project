@@ -1,12 +1,18 @@
-FROM golang:1.24
+FROM golang:1.21 as builder
 
-WORKDIR /usr/src/app
-
-# pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
-COPY go.mod go.sum ./
-RUN go mod download
-
+WORKDIR /app
 COPY . .
-RUN go build -v -o /usr/local/bin/app ./...
 
-CMD ["app"]
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o task-calendar .
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+COPY --from=builder /app/task-calendar .
+COPY --from=builder /app/static ./static
+COPY --from=builder /app/migrations ./migrations
+
+EXPOSE 80
+CMD ["./task-calendar"]
