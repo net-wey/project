@@ -1,10 +1,14 @@
 package Entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Report struct {
 	ID          uint
-	DeveloperID uint
+	DeveloperID uuid.UUID
 	CreatedAt   time.Time
 	Developer   *Developer
 	Tasks       []Task

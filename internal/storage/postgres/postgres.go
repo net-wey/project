@@ -3,8 +3,10 @@ package postgres
 import (
 	"database/sql"
 	"fmt"
+	er "goproject/internal/storage"
 	"goproject/internal/storage/postgres/Entity"
 
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
 
@@ -23,42 +25,46 @@ func New(url string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) SaveDeveloper(developer Entity.Developer) (uint, error) {
+func (s *Storage) SaveDeveloper(developer Entity.Developer) (uuid.UUID, error) {
 	const op = "storage.postgres.SaveDeveloper"
 
 	if developer.Firstname == "" || developer.LastName == "" {
-		return 0, fmt.Errorf("%s: %w", op, ErrInvalidDeveloperData)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, er.ErrInvalidDeveloperData)
 	}
 
 	stmt, err := s.db.Prepare(`
 		INSERT INTO developers (
+			id,
 			firstname, 
 			last_name, 
 			deleted_at
-		) VALUES ($1, $2, $3) 
-		RETURNING id, created_at, modified_at`)
+		) VALUES ($1, $2, $3, $4) 
+		RETURNING created_at, modified_at`)
 	if err != nil {
-		return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 	defer stmt.Close()
 
-	var id uint
+	uid := uuid.New()
+
 	err = stmt.QueryRow(
+		uid,
 		developer.Firstname,
 		developer.LastName,
 		developer.DeletedAt,
-	).Scan(&id, &developer.CreatedAt, &developer.ModifiedAt)
+	).Scan(&developer.CreatedAt, &developer.ModifiedAt)
 	if err != nil {
-		return 0, fmt.Errorf("%s: execute statement: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
-	return id, nil
+	return uid, nil
 }
 
-func (s *Storage) GetDeveloperById(id uint) (Entity.Developer, error) {
+func (s *Storage) GetDeveloperById(uid uuid.UUID) (Entity.Developer, error) {
 	const op = "storage.postgres.GetDeveloperById"
 
-	stmt, err := s.db.Prepare(`		SELECT id, firstname, last_name, created_at, modified_at, deleted_at 
+	stmt, err := s.db.Prepare(`
+		SELECT id, firstname, last_name, created_at, modified_at, deleted_at 
 		FROM developers 
 		WHERE id = $1 AND deleted_at IS NULL`)
 	if err != nil {
@@ -67,7 +73,7 @@ func (s *Storage) GetDeveloperById(id uint) (Entity.Developer, error) {
 	defer stmt.Close()
 
 	var developer Entity.Developer
-	err = stmt.QueryRow(id).Scan(
+	err = stmt.QueryRow(uid).Scan(
 		&developer.ID,
 		&developer.Firstname,
 		&developer.LastName,
@@ -77,7 +83,7 @@ func (s *Storage) GetDeveloperById(id uint) (Entity.Developer, error) {
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return Entity.Developer{}, fmt.Errorf("%s: %w", op, ErrDeveloperNotFound)
+			return Entity.Developer{}, fmt.Errorf("%s: %w", op, er.ErrDeveloperNotFound)
 		}
 		return Entity.Developer{}, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
@@ -125,7 +131,7 @@ func (s *Storage) GetDevelopers() ([]Entity.Developer, error) {
 	return developers, nil
 }
 
-func (s *Storage) DeleteDeveloper(id uint) error {
+func (s *Storage) DeleteDeveloper(uid uuid.UUID) error {
 	const op = "storage.postgres.DeleteDeveloper"
 
 	stmt, err := s.db.Prepare(`
@@ -137,7 +143,7 @@ func (s *Storage) DeleteDeveloper(id uint) error {
 	}
 	defer stmt.Close()
 
-	result, err := stmt.Exec(id)
+	result, err := stmt.Exec(uid)
 	if err != nil {
 		return fmt.Errorf("%s: execute statement: %w", op, err)
 	}
@@ -148,21 +154,22 @@ func (s *Storage) DeleteDeveloper(id uint) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("%s: %w", op, ErrDeveloperNotFound)
+		return fmt.Errorf("%s: %w", op, er.ErrDeveloperNotFound)
 	}
 
 	return nil
 }
 
-func (s *Storage) SaveTask(task Entity.Task) (uint, error) {
+func (s *Storage) SaveTask(task Entity.Task) (uuid.UUID, error) {
 	const op = "storage.postgres.SaveTask"
 
 	if task.Name == "" || task.EstimatePlaned <= 0 {
-		return 0, fmt.Errorf("%s: %w", op, ErrInvalidTaskData)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, er.ErrInvalidTaskData)
 	}
 
 	stmt, err := s.db.Prepare(
 		`INSERT INTO tasks(
+			id,
 			report_id,
 			project_id,
 			name,
@@ -171,16 +178,16 @@ func (s *Storage) SaveTask(task Entity.Task) (uint, error) {
 			estimate_progress,
 			start_timestamp,
 			end_timestamp
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, created_at
-	`)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING created_at`)
 	if err != nil {
-		return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 	defer stmt.Close()
 
-	var id uint
+	uid := uuid.New()
 	err = stmt.QueryRow(
+		uid,
 		task.ReportID,
 		task.ProjectID,
 		task.Name,
@@ -189,10 +196,55 @@ func (s *Storage) SaveTask(task Entity.Task) (uint, error) {
 		task.EstimateProgress,
 		task.StartTimestamp,
 		task.EndTimestamp,
-	).Scan(&id, &task.CreatedAt)
+	).Scan(&task.CreatedAt)
 	if err != nil {
-		return 0, fmt.Errorf("%s: execute statement: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
-	return id, nil
+	return uid, nil
+}
+
+func (s *Storage) GetCalendar(uid uuid.UUID) error {
+	const op = "storage.postgres.GetTask"
+
+	// Сначала проверяем существование задачи
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1)", uid).Scan(&exists)
+	if err != nil {
+		return Entity.Task{}, fmt.Errorf("%s: check task existence: %w", op, err)
+	}
+	if !exists {
+		return Entity.Task{}, fmt.Errorf("%s: %w", op, er.ErrTaskNotFound)
+	}
+
+	// Если задача существует, получаем её данные
+	stmt, err := s.db.Prepare(`
+		SELECT id, report_id, project_id, name, developer_note, 
+			   estimate_planed, estimate_progress, 
+			   start_timestamp, end_timestamp, created_at
+		FROM tasks 
+		WHERE id = $1`)
+	if err != nil {
+		return Entity.Task{}, fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+	defer stmt.Close()
+
+	var task Entity.Task
+	err = stmt.QueryRow(uid).Scan(
+		&task.ID,
+		&task.ReportID,
+		&task.ProjectID,
+		&task.Name,
+		&task.DeveloperNote,
+		&task.EstimatePlaned,
+		&task.EstimateProgress,
+		&task.StartTimestamp,
+		&task.EndTimestamp,
+		&task.CreatedAt,
+	)
+	if err != nil {
+		return Entity.Task{}, fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return task, nil
 }
